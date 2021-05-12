@@ -99,6 +99,15 @@ functions:
 #      variable2: value2
 
 # you can add CloudFormation resource templates here
+resources:
+  - ${file(resources/s3.yml)}
+
+  # CloudFront
+  # - ${file(resources/cloudfront)}
+
+  # CodeBuild
+  # - ${file(resources/code)}
+
 #resources:
 #  Resources:
 #    NewResource:
@@ -109,3 +118,18 @@ functions:
 #     NewOutput:
 #       Description: "Description for the output"
 #       Value: "Some output value"
+
+plugins:
+  - serverless-parameters
+
+custom:
+  parameters:
+    GithubOwner:
+      Type: String
+      Default: shocknawe
+    GithubRepo:
+      Type: String
+      Default: aragonjairus
+    GithubOAuthToken:
+      Type: String
+      Default: ""
