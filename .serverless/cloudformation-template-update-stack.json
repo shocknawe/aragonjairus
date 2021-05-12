@@ -83,6 +83,42 @@
     "CodePipelineBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {}
+    },
+    "CDN": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "DistributionConfig": {
+          "Origins": [
+            {
+              "DomainName": {
+                "Fn::GetAtt": [
+                  "SiteBucket",
+                  "DomainName"
+                ]
+              },
+              "Id": {
+                "Ref": "SiteBucket"
+              },
+              "S3OriginConfig": {
+                "OriginAccessIdentity": ""
+              }
+            }
+          ],
+          "DefaultRootObject": "index.html",
+          "Enabled": true,
+          "DefaultCacheBehavior": {
+            "MinTTL": 86400,
+            "MaxTTL": 31536000,
+            "ForwardedValues": {
+              "QueryString": true
+            },
+            "TargetOriginId": {
+              "Ref": "SiteBucket"
+            },
+            "ViewerProtocolPolicy": "redirect-to-https"
+          }
+        }
+      }
     }
   },
   "Outputs": {

@@ -101,9 +101,7 @@ functions:
 # you can add CloudFormation resource templates here
 resources:
   - ${file(resources/s3.yml)}
-
-  # CloudFront
-  # - ${file(resources/cloudfront)}
+  - ${file(resources/cloudfront.yml)}
 
   # CodeBuild
   # - ${file(resources/code)}
