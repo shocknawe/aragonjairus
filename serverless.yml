@@ -102,6 +102,7 @@ functions:
 resources:
   - ${file(resources/s3.yml)}
   - ${file(resources/cloudfront.yml)}
+  - ${file(resources/codebuild.yml)}
 
   # CodeBuild
   # - ${file(resources/code)}
