@@ -103,6 +103,7 @@ resources:
   - ${file(resources/s3.yml)}
   - ${file(resources/cloudfront.yml)}
   - ${file(resources/codebuild.yml)}
+  - ${file(resources/codepipeline.yml)}
 
   # CodeBuild
   # - ${file(resources/code)}
@@ -125,10 +126,10 @@ custom:
   parameters:
     GithubOwner:
       Type: String
-      Default: shocknawe
+      Default: ${file(config.${opt:stage, 'dev'}.json):GithubOwner}
     GithubRepo:
       Type: String
-      Default: aragonjairus
+      Default: ${file(config.${opt:stage, 'dev'}.json):GithubRepo}
     GithubOAuthToken:
       Type: String
-      Default: ""
+      Default: ${file(config.${opt:stage, 'dev'}.json):GithubOAuthToken}

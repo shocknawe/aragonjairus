@@ -3,6 +3,11 @@ Resources:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
+        Aliases:
+          - ${file(config.${opt:stage, 'dev'}.json):CloudFrontAlias}
+        ViewerCertificate:
+          SslSupportMethod: "sni-only"
+          AcmCertificateArn: ${file(config.${opt:stage, 'dev'}.json):CloudFrontAcmCertificateArn}
         Origins:
           - DomainName: !GetAtt SiteBucket.DomainName
             Id: !Ref SiteBucket
@@ -16,4 +21,4 @@ Resources:
           ForwardedValues:
             QueryString: true
           TargetOriginId: !Ref SiteBucket
-          ViewerProtocolPolicy: "redirect-to-https"
+          ViewerProtocolPolicy: "allow-all"

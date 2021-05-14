@@ -10,7 +10,7 @@ Resources:
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Type: LINUX_CONTAINER
-        Image: "aws/codebuild/nodejs:8.11.0"
+        Image: "aws/codebuild/standard:5.0"
       Source:
         Type: CODEPIPELINE
         BuildSpec: !Sub |
@@ -27,9 +27,8 @@ Resources:
             post_build:
               commands:
                 - aws s3 cp --recursive --acl public-read ./build s3://${SiteBucket}/
-                - aws s3 cp --acl public-read --cache-control="max-age=0, no-cache, no-store, must-revalidate" ./build/service-worker.js s3://${SiteBucket}/
                 - aws s3 cp --acl public-read --cache-control="max-age=0, no-cache, no-store, must-revalidate" ./build/index.html s3://${SiteBucket}/
-                - aws cloudfront create-invalidation --distribution-id ${CDN} --paths /index.html /service-worker.js
+                - aws cloudfront create-invalidation --distribution-id ${CDN} --paths /index.html
           artifacts:
             files:
               - '**/*'
@@ -38,6 +37,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -49,6 +49,7 @@ Resources:
       Policies:
         - PolicyName: root
           PolicyDocument:
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -73,6 +74,7 @@ Resources:
                 Action:
                   - "logs:CreateLogGroup"
                   - "logs:CreateLogStream"
-                  - "logs:PutLotEvents"
+                  - "logs:PutLogEvents"
                   - "cloudfront:CreateInvalidation"
-                Resource: "*"
+                Resource:
+                  - "*"

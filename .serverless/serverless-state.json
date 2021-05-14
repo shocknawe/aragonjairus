@@ -102,6 +102,13 @@
             "Type": "AWS::CloudFront::Distribution",
             "Properties": {
               "DistributionConfig": {
+                "Aliases": [
+                  "aragonjairus.com"
+                ],
+                "ViewerCertificate": {
+                  "SslSupportMethod": "sni-only",
+                  "AcmCertificateArn": "arn:aws:acm:us-east-1:139444310403:certificate/877791a9-51be-4b6d-bac8-aa6c9b11bf67"
+                },
                 "Origins": [
                   {
                     "DomainName": {
@@ -129,7 +136,7 @@
                   "TargetOriginId": {
                     "Ref": "SiteBucket"
                   },
-                  "ViewerProtocolPolicy": "redirect-to-https"
+                  "ViewerProtocolPolicy": "allow-all"
                 }
               }
             }
@@ -153,12 +160,12 @@
               "Environment": {
                 "ComputeType": "BUILD_GENERAL1_SMALL",
                 "Type": "LINUX_CONTAINER",
-                "Image": "aws/codebuild/nodejs:8.11.0"
+                "Image": "aws/codebuild/standard:5.0"
               },
               "Source": {
                 "Type": "CODEPIPELINE",
                 "BuildSpec": {
-                  "Fn::Sub": "version: 0.1\nphases:\n  pre_build:\n    commands:\n      - echo Installing source NPM dependencies...\n      - npm install\n  build:\n    commands:\n      - echo Build started on `date`\n      - npm run build\n  post_build:\n    commands:\n      - aws s3 cp --recursive --acl public-read ./build s3://${SiteBucket}/\n      - aws s3 cp --acl public-read --cache-control=\"max-age=0, no-cache, no-store, must-revalidate\" ./build/service-worker.js s3://${SiteBucket}/\n      - aws s3 cp --acl public-read --cache-control=\"max-age=0, no-cache, no-store, must-revalidate\" ./build/index.html s3://${SiteBucket}/\n      - aws cloudfront create-invalidation --distribution-id ${CDN} --paths /index.html /service-worker.js\nartifacts:\n  files:\n    - '**/*'\n  base-directory: build\n"
+                  "Fn::Sub": "version: 0.1\nphases:\n  pre_build:\n    commands:\n      - echo Installing source NPM dependencies...\n      - npm install\n  build:\n    commands:\n      - echo Build started on `date`\n      - npm run build\n  post_build:\n    commands:\n      - aws s3 cp --recursive --acl public-read ./build s3://${SiteBucket}/\n      - aws s3 cp --acl public-read --cache-control=\"max-age=0, no-cache, no-store, must-revalidate\" ./build/index.html s3://${SiteBucket}/\n      - aws cloudfront create-invalidation --distribution-id ${CDN} --paths /index.html\nartifacts:\n  files:\n    - '**/*'\n  base-directory: build\n"
                 }
               }
             }
@@ -167,6 +174,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
               "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
                 "Statement": [
                   {
                     "Effect": "Allow",
@@ -186,6 +194,7 @@
                 {
                   "PolicyName": "root",
                   "PolicyDocument": {
+                    "Version": "2012-10-17",
                     "Statement": [
                       {
                         "Effect": "Allow",
@@ -255,8 +264,159 @@
                         "Action": [
                           "logs:CreateLogGroup",
                           "logs:CreateLogStream",
-                          "logs:PutLotEvents",
+                          "logs:PutLogEvents",
                           "cloudfront:CreateInvalidation"
+                        ],
+                        "Resource": [
+                          "*"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "CodePipeline": {
+            "Type": "AWS::CodePipeline::Pipeline",
+            "Properties": {
+              "RoleArn": {
+                "Fn::GetAtt": [
+                  "CodePipelineRole",
+                  "Arn"
+                ]
+              },
+              "ArtifactStore": {
+                "Location": {
+                  "Ref": "CodePipelineBucket"
+                },
+                "Type": "S3"
+              },
+              "Stages": [
+                {
+                  "Name": "Source",
+                  "Actions": [
+                    {
+                      "Name": "SourceAction",
+                      "ActionTypeId": {
+                        "Category": "Source",
+                        "Owner": "ThirdParty",
+                        "Provider": "GitHub",
+                        "Version": 1
+                      },
+                      "OutputArtifacts": [
+                        {
+                          "Name": "SourceArtifact"
+                        }
+                      ],
+                      "Configuration": {
+                        "Owner": {
+                          "Ref": "GithubOwner"
+                        },
+                        "Repo": {
+                          "Ref": "GithubRepo"
+                        },
+                        "Branch": "master",
+                        "OAuthToken": {
+                          "Ref": "GithubOAuthToken"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Name": "Build",
+                  "Actions": [
+                    {
+                      "Name": "BuildAction",
+                      "ActionTypeId": {
+                        "Category": "Build",
+                        "Owner": "AWS",
+                        "Provider": "CodeBuild",
+                        "Version": 1
+                      },
+                      "InputArtifacts": [
+                        {
+                          "Name": "SourceArtifact"
+                        }
+                      ],
+                      "OutputArtifacts": [
+                        {
+                          "Name": "BuildArtifact"
+                        }
+                      ],
+                      "Configuration": {
+                        "ProjectName": {
+                          "Ref": "CodeBuild"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "CodePipelineRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+              "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {
+                      "Service": [
+                        "codepipeline.amazonaws.com"
+                      ]
+                    },
+                    "Action": [
+                      "sts:AssumeRole"
+                    ]
+                  }
+                ]
+              },
+              "Policies": [
+                {
+                  "PolicyName": "root",
+                  "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "s3:GetObject",
+                          "s3:GetObjectVersion",
+                          "s3:GetBucketVersioning",
+                          "s3:PutObject"
+                        ],
+                        "Resource": [
+                          {
+                            "Fn::GetAtt": [
+                              "CodePipelineBucket",
+                              "Arn"
+                            ]
+                          },
+                          {
+                            "Fn::Join": [
+                              "",
+                              [
+                                {
+                                  "Fn::GetAtt": [
+                                    "CodePipelineBucket",
+                                    "Arn"
+                                  ]
+                                },
+                                "/*"
+                              ]
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "codebuild:BatchGetBuilds",
+                          "codebuild:StartBuild"
                         ],
                         "Resource": "*"
                       }
@@ -284,11 +444,11 @@
           },
           "GithubRepo": {
             "Type": "String",
-            "Default": "aragonjairus"
+            "Default": "aragonjairus-frontend"
           },
           "GithubOAuthToken": {
             "Type": "String",
-            "Default": ""
+            "Default": "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"
           }
         }
       },
@@ -404,6 +564,13 @@
           "Type": "AWS::CloudFront::Distribution",
           "Properties": {
             "DistributionConfig": {
+              "Aliases": [
+                "aragonjairus.com"
+              ],
+              "ViewerCertificate": {
+                "SslSupportMethod": "sni-only",
+                "AcmCertificateArn": "arn:aws:acm:us-east-1:139444310403:certificate/877791a9-51be-4b6d-bac8-aa6c9b11bf67"
+              },
               "Origins": [
                 {
                   "DomainName": {
@@ -431,7 +598,7 @@
                 "TargetOriginId": {
                   "Ref": "SiteBucket"
                 },
-                "ViewerProtocolPolicy": "redirect-to-https"
+                "ViewerProtocolPolicy": "allow-all"
               }
             }
           }
@@ -455,12 +622,12 @@
             "Environment": {
               "ComputeType": "BUILD_GENERAL1_SMALL",
               "Type": "LINUX_CONTAINER",
-              "Image": "aws/codebuild/nodejs:8.11.0"
+              "Image": "aws/codebuild/standard:5.0"
             },
             "Source": {
               "Type": "CODEPIPELINE",
               "BuildSpec": {
-                "Fn::Sub": "version: 0.1\nphases:\n  pre_build:\n    commands:\n      - echo Installing source NPM dependencies...\n      - npm install\n  build:\n    commands:\n      - echo Build started on `date`\n      - npm run build\n  post_build:\n    commands:\n      - aws s3 cp --recursive --acl public-read ./build s3://${SiteBucket}/\n      - aws s3 cp --acl public-read --cache-control=\"max-age=0, no-cache, no-store, must-revalidate\" ./build/service-worker.js s3://${SiteBucket}/\n      - aws s3 cp --acl public-read --cache-control=\"max-age=0, no-cache, no-store, must-revalidate\" ./build/index.html s3://${SiteBucket}/\n      - aws cloudfront create-invalidation --distribution-id ${CDN} --paths /index.html /service-worker.js\nartifacts:\n  files:\n    - '**/*'\n  base-directory: build\n"
+                "Fn::Sub": "version: 0.1\nphases:\n  pre_build:\n    commands:\n      - echo Installing source NPM dependencies...\n      - npm install\n  build:\n    commands:\n      - echo Build started on `date`\n      - npm run build\n  post_build:\n    commands:\n      - aws s3 cp --recursive --acl public-read ./build s3://${SiteBucket}/\n      - aws s3 cp --acl public-read --cache-control=\"max-age=0, no-cache, no-store, must-revalidate\" ./build/index.html s3://${SiteBucket}/\n      - aws cloudfront create-invalidation --distribution-id ${CDN} --paths /index.html\nartifacts:\n  files:\n    - '**/*'\n  base-directory: build\n"
               }
             }
           }
@@ -469,6 +636,7 @@
           "Type": "AWS::IAM::Role",
           "Properties": {
             "AssumeRolePolicyDocument": {
+              "Version": "2012-10-17",
               "Statement": [
                 {
                   "Effect": "Allow",
@@ -488,6 +656,7 @@
               {
                 "PolicyName": "root",
                 "PolicyDocument": {
+                  "Version": "2012-10-17",
                   "Statement": [
                     {
                       "Effect": "Allow",
@@ -557,8 +726,159 @@
                       "Action": [
                         "logs:CreateLogGroup",
                         "logs:CreateLogStream",
-                        "logs:PutLotEvents",
+                        "logs:PutLogEvents",
                         "cloudfront:CreateInvalidation"
+                      ],
+                      "Resource": [
+                        "*"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "CodePipeline": {
+          "Type": "AWS::CodePipeline::Pipeline",
+          "Properties": {
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "CodePipelineRole",
+                "Arn"
+              ]
+            },
+            "ArtifactStore": {
+              "Location": {
+                "Ref": "CodePipelineBucket"
+              },
+              "Type": "S3"
+            },
+            "Stages": [
+              {
+                "Name": "Source",
+                "Actions": [
+                  {
+                    "Name": "SourceAction",
+                    "ActionTypeId": {
+                      "Category": "Source",
+                      "Owner": "ThirdParty",
+                      "Provider": "GitHub",
+                      "Version": 1
+                    },
+                    "OutputArtifacts": [
+                      {
+                        "Name": "SourceArtifact"
+                      }
+                    ],
+                    "Configuration": {
+                      "Owner": {
+                        "Ref": "GithubOwner"
+                      },
+                      "Repo": {
+                        "Ref": "GithubRepo"
+                      },
+                      "Branch": "master",
+                      "OAuthToken": {
+                        "Ref": "GithubOAuthToken"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "Name": "Build",
+                "Actions": [
+                  {
+                    "Name": "BuildAction",
+                    "ActionTypeId": {
+                      "Category": "Build",
+                      "Owner": "AWS",
+                      "Provider": "CodeBuild",
+                      "Version": 1
+                    },
+                    "InputArtifacts": [
+                      {
+                        "Name": "SourceArtifact"
+                      }
+                    ],
+                    "OutputArtifacts": [
+                      {
+                        "Name": "BuildArtifact"
+                      }
+                    ],
+                    "Configuration": {
+                      "ProjectName": {
+                        "Ref": "CodeBuild"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "CodePipelineRole": {
+          "Type": "AWS::IAM::Role",
+          "Properties": {
+            "AssumeRolePolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Service": [
+                      "codepipeline.amazonaws.com"
+                    ]
+                  },
+                  "Action": [
+                    "sts:AssumeRole"
+                  ]
+                }
+              ]
+            },
+            "Policies": [
+              {
+                "PolicyName": "root",
+                "PolicyDocument": {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                    {
+                      "Effect": "Allow",
+                      "Action": [
+                        "s3:GetObject",
+                        "s3:GetObjectVersion",
+                        "s3:GetBucketVersioning",
+                        "s3:PutObject"
+                      ],
+                      "Resource": [
+                        {
+                          "Fn::GetAtt": [
+                            "CodePipelineBucket",
+                            "Arn"
+                          ]
+                        },
+                        {
+                          "Fn::Join": [
+                            "",
+                            [
+                              {
+                                "Fn::GetAtt": [
+                                  "CodePipelineBucket",
+                                  "Arn"
+                                ]
+                              },
+                              "/*"
+                            ]
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "Effect": "Allow",
+                      "Action": [
+                        "codebuild:BatchGetBuilds",
+                        "codebuild:StartBuild"
                       ],
                       "Resource": "*"
                     }
@@ -596,7 +916,7 @@
     "isDashboardMonitoringPreconfigured": false
   },
   "package": {
-    "artifactDirectoryName": "serverless/aragonjairus/dev/1620851450606-2021-05-12T20:30:50.606Z",
+    "artifactDirectoryName": "serverless/aragonjairus/dev/1620980673294-2021-05-14T08:24:33.294Z",
     "artifact": ""
   }
 }
